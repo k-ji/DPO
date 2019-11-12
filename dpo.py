@@ -1,4 +1,7 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import datetime
 
 def format_PI_data(df):
     
@@ -96,6 +99,33 @@ def format_PI_data(df):
     
     return df
 
+
+def get_all_mode_summary(df):
+    cum_qty_mode = pd.DataFrame(df.groupby(['Mode']).CumQty.sum())
+    cum_qty_mode['Percentage'] = cum_qty_mode.CumQty / cum_qty_mode.CumQty.sum()
+
+
+    plt.figure(figsize=(10, 6))
+
+    sns.barplot(x=cum_qty_mode.index,
+            y = cum_qty_mode.CumQty,
+            palette =['#275380','#275380',
+                      '#30689F','#30689F',
+                      '#3A7DBF','#3A7DBF',
+                      '#4391DF','#4391DF','#4391DF','#4391DF','#4391DF',
+                      '#4DA6FF','#4DA6FF','#4DA6FF','#4DA6FF'])
+    plt.ylabel('Size')
+    plt.title('Price Improvement by Time')
+    plt.xticks(rotation=45)
+    
+    date = datetime.datetime.now().strftime("%Y%m%d")
+    file_name = 'F:/UserFolders/KJ/data/wqt/' + date + '-Overall.png'
+    
+    plt.savefig(file_name)
+    plt.show()
+    return cum_qty_mode
+
+
 def get_fill_by_level(df,post='PL',freq='10min'):
     if post == 'PL':
         levels = ['PL0','PL1','PL2','PL3']
@@ -107,6 +137,8 @@ def get_fill_by_level(df,post='PL',freq='10min'):
         levels = ['IL0','IL1']
     elif post == 'ML':
         levels = ['ML0','ML1']
+    elif post == 'All':
+        levels = [x for x in list(sorted(set(df.Mode))) if x != 'NA']
         
     data = df[['LastUpdateTime','OrderQty','CumQty','Mode']].groupby([pd.Grouper(key='Mode'),
                                            pd.Grouper(key='LastUpdateTime',freq=freq)]).sum()
@@ -114,6 +146,8 @@ def get_fill_by_level(df,post='PL',freq='10min'):
     df2 = pd.DataFrame([data[data.index.get_level_values('Mode')==x]['CumQty'].tolist() for x in levels]).T
     
     df2.columns = levels
+    
+    #Assuming each time bucket has all post types
     df2.index = [x.time() for x in pd.to_datetime(data.index.levels[1],format='%H:%M:%S')]
     
     
@@ -213,7 +247,37 @@ def plot_stacked_bar(df,post='PL',tp='Size'):
     
     #if len(levels) == 1
     #plt.legend((p0[0], p1[0], p2[0], p3[0]), levels)
-    plt.legend(legend_levels, levels)
-
+    plt.legend(legend_levels, levels, loc="upper right")
+    
+    date = datetime.datetime.now().strftime("%Y%m%d")
+    file_name = 'F:/UserFolders/KJ/data/wqt/' + date + '-' + tp + '-' + post + '.png'
+    
+    plt.savefig(file_name)
     plt.show()
+    
+    
+#Read file exported from Raptor Exchange Deep Book Tracker
+file_name = "H:/dop_20191112_v3.xlsx"
+data = pd.read_excel(file_name,index_col=None)
+df = format_PI_data(data)
+
+pd.set_option('display.max_columns', 999)
+df.head()
+
+
+#Get fill summary by post mode 
+summary_by_mode = get_all_mode_summary(df)
+
+all_modes = get_fill_by_level(df,'All')
+all_modes.head()
+
+posts = ['PL', 'DPL', 'PDL', 'IL', 'ML']
+df2 = df.loc[df.LastUpdateTime < '1900-01-01 15:00:00'].copy()
+for post in posts:
+    freq = '15min'
+    pl = get_fill_by_level(df2,post=post,freq=freq)
+
+    #tp='Size'
+    plot_stacked_bar(pl,post=post,tp='Size')
+    plot_stacked_bar(pl,post=post,tp='Pct')
     
